@@ -14,6 +14,10 @@ exclude_filename = []
 exclude_dir = [".svn", ".git"]
 exclude_ext = ["rev", "log", "pdb", "obj", "gitignore"]
 
+info_FS=["","",""]
+info_DB=["","",""]
+info_full=info_FS+info_DB
+
 class PackageManager(FileSystemEventHandler):
 	def __init__(self, path):
 		self.filename = {"FileList": "filelist.json", "DB": "filelistDB.json"}
@@ -55,9 +59,10 @@ class PackageManager(FileSystemEventHandler):
 				hash = hashlib.md5()
 				with open(fullpath, "rb") as f:
 					hash.update(f.read())
-				self.FileList[relative_path] = [hash.hexdigest(), os.stat(fullpath).st_mtime, os.stat(fullpath).st_size]+self.DB.get(relative_path, ["", "", ""])
+				self.FileList[relative_path] = [hash.hexdigest(), os.stat(fullpath).st_mtime, os.stat(fullpath).st_size]+self.DB.get(relative_path, info_DB)
 		for k in [k for k in self.DB.keys() if k not in self.FileList.keys()]:
-			self.FileList[k] = ["", "",""]+self.DB.get(k,["","",""])
+			if(self.DB[3]!=""):
+				self.FileList[k] = info_FS+self.DB.get(k,info_DB)
 		with open(self.filename["FileList"], "w", encoding="utf8") as f:
 			json.dump(self.FileList, f, ensure_ascii=False,sort_keys=True)
 		print("Make "+self.filename["FileList"]+":"+str(len(self.FileList)))
@@ -68,7 +73,7 @@ class PackageManager(FileSystemEventHandler):
 			changes = json.loads(data)
 			self.DB.update(changes)
 			for k, v in changes.items():
-				self.FileList[k][3:] = v
+				self.FileList[k][len(info_FS):] = v
 			with open(self.filename["FileList"], "w", encoding="utf8") as f:
 				json.dump(self.FileList, f, ensure_ascii=False,sort_keys=True)
 				print("Make "+self.filename["FileList"]+":"+str(len(self.FileList)))
@@ -86,24 +91,30 @@ class PackageManager(FileSystemEventHandler):
 			if path.suffix in exclude_ext or len(set(path.parts).intersection(set(exclude_dir)))!=0:
 				continue
 			relative_path = os.path.relpath(fullpath, self.path)
-			if(lastupdatepath == fullpath or self.filename["FileList"] in fullpath):
+			if(lastupdatepath == fullpath):
 				continue
 			else:
 				lastupdatepath = fullpath
 				
 				changed = changed+1
 				if(remove):
-					try:
+					temp=self.FileList.get(relative_path,info_full)
+					if(temp[0]!="" and temp[-1]!=""):
+						self.FileList[relative_path]=info_FS+self.DB.get(relative_path, info_DB)
+					if(temp[0]!="" and temp[-1]==""):
 						del self.FileList[relative_path]
-					except:
-						None
-					for dk in [f for f in self.FileList.keys() if fullpath+"/" in f]:
-						del self.FileList[dk]
+			
+					for dk in [f for f in self.FileList.keys() if relative_path+"/" in f]:
+						temp=self.FileList.get(dk,info_full)
+						if(temp[-1]!=""):
+							self.FileList[dk]=info_FS+self.DB.get(dk,info_DB)
+						else:
+							del self.FileList[dk]
 				else:
 					with open(fullpath, "rb") as f:
 						hash = hashlib.md5()
 						hash.update(f.read())
-						self.FileList[relative_path] = [hash.hexdigest(), os.stat(fullpath).st_mtime, os.stat(fullpath).st_size]+self.DB.get(relative_path, ["", "", ""])
+						self.FileList[relative_path] = [hash.hexdigest(), os.stat(fullpath).st_mtime, os.stat(fullpath).st_size]+self.DB.get(relative_path, info_DB)
 
 		if(changed != 0):
 			print("Update "+self.filename["FileList"]+" : "+str(changed)+" files")
